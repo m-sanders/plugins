@@ -102,6 +102,7 @@ enum ImportType {
 enum ExprKind {
     #[default]
     Css,
+    Keyframes,
     Styled,
     GlobalJSX,
 }
@@ -565,10 +566,17 @@ impl<C: Comments> Fold for EmotionTransformer<'_, C> {
                     if let Some(package) = self.import_packages.get(&i.to_id()) {
                         if !expr.args.is_empty() {
                             if let PackageMeta::Named(kind) = package {
-                                if matches!(kind, ExprKind::Css) && !self.in_jsx_element {
+                                if matches!(kind, ExprKind::Css | ExprKind::Keyframes)
+                                    && !self.in_jsx_element
+                                {
                                     self.comments.add_pure_comment(expr.span.lo());
                                     if self.options.auto_label.unwrap_or(false) {
-                                        expr.args.push(self.create_label(true).as_arg());
+                                        let label = if matches!(kind, ExprKind::Keyframes) {
+                                            self.create_label(false)
+                                        } else {
+                                            self.create_label(true)
+                                        };
+                                        expr.args.push(label.as_arg());
                                     }
                                     if let Some(cm) = self.create_sourcemap(expr.span.lo) {
                                         expr.args.push(cm.as_arg());
@@ -702,13 +710,17 @@ impl<C: Comments> Fold for EmotionTransformer<'_, C> {
                                 }
                             }
                             if let PackageMeta::Namespace(c) = package {
-                                if c.exported_names
-                                    .iter()
-                                    .any(|n| match_css_export(n, &m.prop))
+                                if let Some(kind) =
+                                    find_css_export_kind(&c.exported_names, &m.prop)
                                 {
                                     self.comments.add_pure_comment(expr.span.lo());
                                     if self.options.auto_label.unwrap_or(false) {
-                                        expr.args.push(self.create_label(true).as_arg());
+                                        let label = if matches!(kind, ExprKind::Keyframes) {
+                                            self.create_label(false)
+                                        } else {
+                                            self.create_label(true)
+                                        };
+                                        expr.args.push(label.as_arg());
                                     }
                                     if let Some(cm) = self.create_sourcemap(expr.span.lo()) {
                                         expr.args.push(cm.as_arg());
@@ -840,16 +852,24 @@ impl<C: Comments> Fold for EmotionTransformer<'_, C> {
                         }
                     }
                 }
-                // css``
+                // css`` or keyframes``
                 Expr::Ident(i) => {
-                    if let Some(PackageMeta::Named(ExprKind::Css)) =
+                    if let Some(PackageMeta::Named(kind @ (ExprKind::Css | ExprKind::Keyframes))) =
                         self.import_packages.get(&i.to_id())
                     {
+                        let kind = *kind;
                         let mut args = self.create_args_from_tagged_tpl(&mut tagged_tpl.tpl);
                         if !self.in_jsx_element {
                             self.comments.add_pure_comment(i.span.lo());
                             if self.options.auto_label.unwrap_or(false) {
-                                args.push(self.create_tagged_tpl_label_arg());
+                                if matches!(kind, ExprKind::Keyframes) {
+                                    let label = self.create_label(false);
+                                    if !label.is_empty() {
+                                        args.push(label.as_arg());
+                                    }
+                                } else {
+                                    args.push(self.create_tagged_tpl_label_arg());
+                                }
                             }
                             if let Some(cm) = self.create_sourcemap(tagged_tpl.span.lo()) {
                                 args.push(cm.as_arg());
@@ -913,10 +933,10 @@ impl<C: Comments> Fold for EmotionTransformer<'_, C> {
                                     }
                                 }
                                 PackageMeta::Namespace(c) => {
-                                    if c.exported_names
-                                        .iter()
-                                        .any(|item| match_css_export(item, &member_expr.prop))
-                                    {
+                                    if let Some(kind) = find_css_export_kind(
+                                        &c.exported_names,
+                                        &member_expr.prop,
+                                    ) {
                                         self.comments.add_pure_comment(member_expr.span.lo());
                                         return Expr::Call(CallExpr {
                                             callee: member_expr.take().as_callee(),
@@ -925,7 +945,16 @@ impl<C: Comments> Fold for EmotionTransformer<'_, C> {
                                                     &mut tagged_tpl.tpl,
                                                 );
                                                 if self.options.auto_label.unwrap_or(false) {
-                                                    args.push(self.create_tagged_tpl_label_arg());
+                                                    if matches!(kind, ExprKind::Keyframes) {
+                                                        let label = self.create_label(false);
+                                                        if !label.is_empty() {
+                                                            args.push(label.as_arg());
+                                                        }
+                                                    } else {
+                                                        args.push(
+                                                            self.create_tagged_tpl_label_arg(),
+                                                        );
+                                                    }
                                                 }
                                                 if let Some(cm) =
                                                     self.create_sourcemap(tagged_tpl.span.lo())
@@ -1046,15 +1075,18 @@ impl<C: Comments> Fold for EmotionTransformer<'_, C> {
     }
 }
 
-fn match_css_export(item: &ExportItem, prop: &MemberProp) -> bool {
-    if matches!(item.kind, ExprKind::Css) {
-        if let MemberProp::Ident(prop) = prop {
-            if item.name.as_str() == prop.sym.as_ref() {
-                return true;
-            }
-        }
+fn find_css_export_kind(items: &[ExportItem], prop: &MemberProp) -> Option<ExprKind> {
+    if let MemberProp::Ident(ident) = prop {
+        items
+            .iter()
+            .find(|item| {
+                matches!(item.kind, ExprKind::Css | ExprKind::Keyframes)
+                    && item.name.as_str() == ident.sym.as_ref()
+            })
+            .map(|item| item.kind)
+    } else {
+        None
     }
-    false
 }
 
 #[inline]

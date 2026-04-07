@@ -1,0 +1,4 @@
+// https://github.com/swc-project/plugins/issues/607
+// keyframes label should be plain name string, not "label:name;" CSS property
+import { keyframes } from "@emotion/react";
+const pulse = /*#__PURE__*/ keyframes("0%{opacity:1;}50%{opacity:0.5;}100%{opacity:1;}", "pulse", "/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1qcy9rZXlmcmFtZXMudHMiLCJzb3VyY2VzIjpbImVtb3Rpb24tanMva2V5ZnJhbWVzLnRzIl0sInNvdXJjZXNDb250ZW50IjpbIi8vIGh0dHBzOi8vZ2l0aHViLmNvbS9zd2MtcHJvamVjdC9wbHVnaW5zL2lzc3Vlcy82MDdcbi8vIGtleWZyYW1lcyBsYWJlbCBzaG91bGQgYmUgcGxhaW4gbmFtZSBzdHJpbmcsIG5vdCBcImxhYmVsOm5hbWU7XCIgQ1NTIHByb3BlcnR5XG5cbmltcG9ydCB7IGtleWZyYW1lcyB9IGZyb20gXCJAZW1vdGlvbi9yZWFjdFwiO1xuXG5jb25zdCBwdWxzZSA9IGtleWZyYW1lc2BcbiAgMCUgeyBvcGFjaXR5OiAxOyB9XG4gIDUwJSB7IG9wYWNpdHk6IDAuNTsgfVxuICAxMDAlIHsgb3BhY2l0eTogMTsgfVxuYDtcbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFLYyJ9 */");
